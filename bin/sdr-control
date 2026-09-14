@@ -82,6 +82,7 @@ start_satdump() {
 }
 
 start_gpredict() {
+    prepare_satellite
     local bin; bin=$(find_bin "$GPREDICT_BIN" gpredict)
     [[ -n "$bin" ]] || { zenity --error --text="GPredict bulunamadı. README kurulum bölümüne bakın."; return; }
     "$bin" >/dev/null 2>&1 &

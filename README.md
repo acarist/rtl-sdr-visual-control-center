@@ -35,12 +35,14 @@ Example package names:
 
 ```bash
 # Arch/CachyOS (SatDump may be obtained from the AUR)
-sudo pacman -S --needed base-devel cmake git libusb rtl-sdr zenity docker docker-compose gpredict
+sudo pacman -S --needed base-devel cmake git libusb rtl-sdr zlib zstd ncurses \
+  libsndfile zenity docker docker-compose gpredict
 yay -S satdump
 
 # Debian/Ubuntu essentials
 sudo apt install git build-essential cmake pkg-config libusb-1.0-0-dev \
-  librtlsdr-dev rtl-sdr zenity docker.io docker-compose-plugin gpredict
+  librtlsdr-dev zlib1g-dev libzstd-dev libncurses-dev libsndfile1-dev \
+  rtl-sdr zenity docker.io docker-compose-plugin gpredict
 ```
 
 For SatDump installation alternatives, use the project's official instructions:
