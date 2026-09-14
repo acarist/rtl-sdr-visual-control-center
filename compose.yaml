@@ -1,0 +1,46 @@
+services:
+  adsb:
+    image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+    container_name: rtl-sdr-control-adsb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ADSB_PORT:-8090}:80"
+    environment:
+      TZ: ${TZ:-UTC}
+      READSB_NET_CONNECTOR: host.docker.internal,${READSB_PORT:-30005},beast_in
+      READSB_LAT: ${LAT}
+      READSB_LON: ${LON}
+      READSB_ALT: ${ALT:-0m}
+      TAR1090_PAGETITLE: "${CALLSIGN:-RTL-SDR} ADS-B"
+      TAR1090_DEFAULTCENTERLAT: ${LAT}
+      TAR1090_DEFAULTCENTERLON: ${LON}
+      TAR1090_DISPLAYUNITS: metric
+      TAR1090_RANGERINGS: "true"
+      TAR1090_RANGERINGSDISTANCES: "25,50,100,200"
+      UPDATE_TAR1090: "true"
+    volumes:
+      - ./data/adsb:/var/globe_history
+      - ./runtime/tar1090:/var/tar1090_git_source:ro
+    tmpfs:
+      - /run:exec,size=128M
+      - /var/log:size=64M
+
+  acarshub:
+    image: ghcr.io/sdr-enthusiasts/docker-acarshub:latest
+    container_name: rtl-sdr-control-acarshub
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ACARS_PORT:-8081}:80"
+      - "127.0.0.1:${ACARS_UDP_PORT:-5550}:5550/udp"
+    environment:
+      TZ: ${TZ:-UTC}
+      ENABLE_ACARS: "true"
+      ENABLE_VDLM: "false"
+      ACARS_CONNECTIONS: udp
+      MIN_LOG_LEVEL: "3"
+    volumes:
+      - ./data/acars:/run/acars
+    tmpfs:
+      - /database:exec,size=64M
+      - /var/log:size=64M
+

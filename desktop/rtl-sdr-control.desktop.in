@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=RTL-SDR Görsel Kontrol Merkezi
+Comment=ADS-B, ACARS ve uydu alım modları
+Exec=@INSTALL_DIR@/bin/sdr-control
+Icon=satellite
+Terminal=false
+Categories=HamRadio;Science;
+

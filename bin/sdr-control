@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -u
+
+project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+set -a
+source "$project_dir/.env"
+set +a
+compose=(docker compose --project-directory "$project_dir" --env-file "$project_dir/.env" -f "$project_dir/compose.yaml")
+run_dir="$project_dir/run"
+mkdir -p "$run_dir"
+
+find_bin() {
+    local configured="$1" fallback="$2"
+    if [[ "$configured" == */* && -x "$configured" ]]; then printf '%s' "$configured"; return; fi
+    command -v "$configured" 2>/dev/null || command -v "$fallback" 2>/dev/null || true
+}
+
+readsb_bin=$(find_bin "$project_dir/runtime/bin/readsb" readsb)
+acarsdec_bin=$(find_bin "$project_dir/runtime/bin/acarsdec" acarsdec)
+
+stop_pidfile() {
+    local pidfile="$1" expected="$2" pid cmdline
+    [[ -s "$pidfile" ]] || return 0
+    pid=$(<"$pidfile")
+    cmdline=$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)
+    if [[ "$cmdline" == *"$expected"* ]]; then kill "$pid" 2>/dev/null || true; fi
+    : >"$pidfile"
+}
+
+stop_native() {
+    stop_pidfile "$run_dir/readsb.pid" readsb
+    stop_pidfile "$run_dir/acarsdec.pid" acarsdec
+}
+
+stop_gui_receivers() {
+    pkill -x gqrx 2>/dev/null || true
+    pkill -x satdump-ui 2>/dev/null || true
+}
+
+prepare_receiver() {
+    stop_gui_receivers
+    stop_native
+}
+
+start_adsb() {
+    prepare_receiver
+    "$readsb_bin" --device-type=rtlsdr --device="$RTL_SERIAL" --gain=auto \
+        --lat="$LAT" --lon="$LON" --net --net-bo-port="$READSB_PORT" \
+        >"$run_dir/readsb.log" 2>&1 &
+    echo $! >"$run_dir/readsb.pid"
+    sleep 2
+    kill -0 "$(<"$run_dir/readsb.pid")" 2>/dev/null || { zenity --error --text="RTL-SDR açılamadı. readsb.log dosyasını kontrol edin."; return; }
+    "${compose[@]}" stop acarshub >/dev/null 2>&1 || true
+    "${compose[@]}" up -d adsb || return
+    sleep 3
+    xdg-open "http://127.0.0.1:$ADSB_PORT/" >/dev/null 2>&1 &
+}
+
+start_acars() {
+    prepare_receiver
+    "${compose[@]}" stop adsb >/dev/null 2>&1 || true
+    "${compose[@]}" up -d acarshub || return
+    IFS=';' read -r -a frequencies <<<"$ACARS_FREQUENCIES"
+    "$acarsdec_bin" -o 4 -i "$CALLSIGN" -j "127.0.0.1:$ACARS_UDP_PORT" \
+        -r "$RTL_SERIAL" "${frequencies[@]}" >"$run_dir/acarsdec.log" 2>&1 &
+    echo $! >"$run_dir/acarsdec.pid"
+    sleep 2
+    kill -0 "$(<"$run_dir/acarsdec.pid")" 2>/dev/null || { zenity --error --text="RTL-SDR açılamadı. acarsdec.log dosyasını kontrol edin."; return; }
+    xdg-open "http://127.0.0.1:$ACARS_PORT/" >/dev/null 2>&1 &
+}
+
+prepare_satellite() {
+    prepare_receiver
+    "${compose[@]}" stop adsb acarshub >/dev/null 2>&1 || true
+}
+
+start_satdump() {
+    prepare_satellite
+    local bin; bin=$(find_bin "$SATDUMP_BIN" satdump-ui)
+    [[ -n "$bin" ]] || { zenity --error --text="SatDump bulunamadı. README kurulum bölümüne bakın."; return; }
+    "$bin" >/dev/null 2>&1 &
+}
+
+start_gpredict() {
+    local bin; bin=$(find_bin "$GPREDICT_BIN" gpredict)
+    [[ -n "$bin" ]] || { zenity --error --text="GPredict bulunamadı. README kurulum bölümüne bakın."; return; }
+    "$bin" >/dev/null 2>&1 &
+}
+
+start_satellite_center() { prepare_satellite; start_gpredict; start_satdump; }
+
+stop_all() {
+    stop_native
+    stop_gui_receivers
+    pkill -x gpredict 2>/dev/null || true
+    "${compose[@]}" stop adsb acarshub >/dev/null 2>&1 || true
+    zenity --info --text="Tüm alıcı modları durduruldu; RTL-SDR serbest."
+}
+
+while true; do
+    choice=$(zenity --list --title="RTL-SDR Görsel Kontrol Merkezi" \
+        --text="Tek dongle ile çalıştırılacak modu seçin:" --column="Mod" --column="Açıklama" \
+        "ADS-B Harita" "1090 MHz canlı uçak haritası — localhost:$ADSB_PORT" \
+        "ACARS Mesajları" "VHF uçak mesajları — localhost:$ACARS_PORT" \
+        "Uydu Merkezi" "GPredict yörünge haritası + SatDump" \
+        "SatDump" "Spektrum, kayıt, canlı çözümleme ve görüntüler" \
+        "GPredict" "Dünya haritası, yörünge ve geçiş takvimi" \
+        "Tümünü Durdur" "Dongle'ı diğer uygulamalar için serbest bırak" \
+        --width=780 --height=500) || exit 0
+    case "$choice" in
+        "ADS-B Harita") start_adsb ;;
+        "ACARS Mesajları") start_acars ;;
+        "Uydu Merkezi") start_satellite_center ;;
+        "SatDump") start_satdump ;;
+        "GPredict") start_gpredict ;;
+        "Tümünü Durdur") stop_all ;;
+    esac
+done

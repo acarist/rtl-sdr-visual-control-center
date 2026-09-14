@@ -1,0 +1,58 @@
+diff --git a/html/index.html b/html/index.html
+index bee6fb2..fb4ae1c 100644
+--- a/html/index.html
++++ b/html/index.html
+@@ -88,6 +88,7 @@
+             </div>
+             <div id="selected_icao" title="ICAO hex ID: The aircraft's unique ICAO identification number shown in hexadecimal format as set in the aircrafts transponder (can be wrong, we will still display the data with the wrong hex)">
+             </div>
++            <div id="selected_fr24_link" class="fr24-link"></div>
+             <div style="display: none" id="creditsSelected">
+               <table class="infoSectionTable">
+                 <tr>
+diff --git a/html/script.js b/html/script.js
+index 3a23a38..bf91475 100644
+--- a/html/script.js
++++ b/html/script.js
+@@ -3570,6 +3570,18 @@ function refreshSelected() {
+ 
+     jQuery('#selected_callsign').updateText(selected.name);
+ 
++    let fr24Target = null;
++    if (selected.registration) {
++        fr24Target = 'https://www.flightradar24.com/data/aircraft/' + encodeURIComponent(selected.registration.toLowerCase());
++    } else if (selected.name) {
++        fr24Target = 'https://www.flightradar24.com/data/flights/' + encodeURIComponent(selected.name.trim().toLowerCase());
++    }
++    if (fr24Target) {
++        jQuery('#selected_fr24_link').html('<a target="_blank" rel="noopener noreferrer" href="' + fr24Target + '">Flightradar24\u2019te A\u00e7</a>');
++    } else {
++        jQuery('#selected_fr24_link').empty();
++    }
++
+     if (showTrace) {
+         if (selected.position_time) {
+             const date = new Date(selected.position_time * 1000);
+diff --git a/html/style.css b/html/style.css
+index 4c00072..64b9ecc 100644
+--- a/html/style.css
++++ b/html/style.css
+@@ -722,6 +722,18 @@ table.infoSectionTable tr td {
+     line-height: calc( 22px * var(--SCALE));
+     border-radius: calc( 4px * var(--SCALE));
+ }
++.fr24-link {
++    margin-top: calc(8px * var(--SCALE));
++}
++.fr24-link a {
++    display: inline-block;
++    background-color: #d71920;
++    color: white;
++    text-decoration: none;
++    padding: calc(5px * var(--SCALE)) calc(9px * var(--SCALE));
++    border-radius: calc(4px * var(--SCALE));
++    font-weight: 600;
++}
+ .bottom-info-container {
+     padding-top: calc( 10px * var(--SCALE));
+     padding-bottom: calc( 10px * var(--SCALE));
